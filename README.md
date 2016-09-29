@@ -1,3 +1,7 @@
 # mentohust_jmu
 
-用Mentohust最初版的源代码加上clone来的V4算法拼凑出的一个Mentohust。可是在网络中心日志中发现我这个拼凑出来的Mentohust无法发送本地的信息给锐捷，导致连接失败。目前我还没有想到好的办法解决这个问题，先留着，再来看。感觉只是临门一脚了，如果那个V4算法是正确的话。
+用Mentohust最初版的源代码加上clone来的V4算法拼凑出的一个Mentohust.
+
+适用于集美大学联通宽带接入学生
+
+Ubuntu下实测认证成功
