@@ -1,6 +1,6 @@
 # mentohust_jmu
 
-使用之前，请查看 www.codingstory.com.cn 中的介绍，自行修改代码后使用。该版本只有我自己能用，只有我自己能用，只有我自己能用，我做不出通用的，不好意思。
+使用之前，请查看 http://codingstory.com.cn/mo-gai-mentohust-v4ban-ben-de-xin-de/ 中的介绍，自行修改代码后使用。该版本只有我自己能用，只有我自己能用，只有我自己能用，我做不出通用的，不好意思。
 
 用 Mentohust 最初版的源代码加上 Fork 来的V4算法拼凑出的一个Mentohust.
 
