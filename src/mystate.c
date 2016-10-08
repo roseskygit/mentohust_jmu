@@ -47,6 +47,7 @@ extern pcap_t *hPcap;
 extern u_char *fillBuf;
 extern unsigned fillSize;
 extern u_int32_t pingHost;
+extern u_int32_t ip, mask, gateway, dns, pingHost;
 #ifndef NO_ARP
 extern u_int32_t rip, gateway;
 extern u_char gateMAC[];
@@ -54,6 +55,7 @@ static void sendArpPacket();	/* ARP监视 */
 #endif
 
 static const u_char pad[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
 static const unsigned char pkt1[553] = {
 /*0x01, 0xd0, 0xf8, 0x00, 0x00, 0x03, 0x30, 0x3a, 
 0x64, 0xc7, 0x4f, 0xc0, 0x88, 0x8e, 0x01, 0x01, 
@@ -318,6 +320,7 @@ void customizeServiceName(char* service)
 
 int switchState(int type)
 {
+
 	if (state == type) /* 跟上次是同一状态？ */
 		sendCount++;
 	else
@@ -388,11 +391,11 @@ int restart()
 static int renewIP()
 {
 	setTimer(0);	/* 取消定时器 */
-	printf(_(">> 正在获取IP...\n"));
+	printf(">> 正在获取IP...\n");
     setreuid(0,0);                              // new code
     printf("%s\n", dhcpScript);					// new code
 	system(dhcpScript);
-    printf(_(">> 操作结束。\n"));
+    printf(">> 操作结束。\n");
 	dhcpMode += 3; /* 标记为已获取，123变为456，5不需再认证*/
 	if (fillHeader() == -1)
 		exit(EXIT_FAILURE);
@@ -411,11 +414,12 @@ static void fillEtherAddr(u_int32_t protocol)
 
 static int sendStartPacket()
 {
+	printf(">> 发送Start包...\n");
 	if (startMode%3 == 2)	/* 赛尔 */
 	{
 		if (sendCount == 0)
 		{
-			printf(_(">> 寻找服务器...\n"));
+			printf(_(">> 寻找服务器...(赛尔)\n"));
 			memcpy(sendPacket, STANDARD_ADDR, 6);
 			memcpy(sendPacket+0x06, localMAC, 6);
 			*(u_int32_t *)(sendPacket+0x0C) = htonl(0x888E0101);
@@ -433,6 +437,11 @@ static int sendStartPacket()
 		memcpy(sendPacket + 0x12, pkt_start, sizeof(pkt1));      // new code
 	//	memcpy(sendPacket + 0xe2, computeV4(pad, 16), 0x80);     // new code
 	//	memcpy(sendPacket + 0x100, computeV4(pad, 16), 0x80); 
+
+		memcpy(sendPacket+0x17, encodeIP(ip), 0x04);	//fill IP
+		memcpy(sendPacket+0x1b, encodeIP(mask), 0x04);	//fill mask
+		memcpy(sendPacket+0x1F, encodeIP(gateway), 0x04); //fill gateway
+
 		setTimer(timeout);
 	}
 	return pcap_sendpacket(hPcap, sendPacket, 571);
@@ -440,12 +449,13 @@ static int sendStartPacket()
 
 static int sendIdentityPacket()
 {
+	printf(">> 发送Identity包...\n");
 	int nameLen = strlen(userName);
 	if (startMode%3 == 2)	/* 赛尔 */
 	{
 		if (sendCount == 0)
 		{
-			printf(_(">> 发送用户名...\n"));
+			printf(_(">> 发送用户名...(赛尔)\n"));
 			*(u_int16_t *)(sendPacket+0x0E) = htons(0x0100);
 			*(u_int16_t *)(sendPacket+0x10) = *(u_int16_t *)(sendPacket+0x14) = htons(nameLen+30);
 			sendPacket[0x12] = 0x02;
@@ -471,6 +481,13 @@ static int sendIdentityPacket()
 		memcpy(sendPacket+0x17, userName, nameLen);                         // new code
 		memcpy(sendPacket+0x17+nameLen, pkt_identity, sizeof(pkt2));       // new code
 		//memcpy(sendPacket + 0xe7 + nameLen, computeV4(pad, 16), 0x80);     // new code
+
+		/* 不知道为啥，在Identity包里插入 Ip地址等信息，服务器收到的ip地址为0.0.0.0
+		memcpy(sendPacket+0x28, encodeIP(ip), 0x04);	//fill IP
+		memcpy(sendPacket+0x2c, encodeIP(mask), 0x04);	//fill mask
+		memcpy(sendPacket+0x30, encodeIP(gateway), 0x04); //fill gateway
+		*/
+
 		memcpy(sendPacket + 0x110 + nameLen, computeV4(pad, 16), 0x80);
 		setTimer(timeout);
 	}
@@ -479,20 +496,24 @@ static int sendIdentityPacket()
 
 static int sendChallengePacket()
 {
+	int i;
+	printf(">> 发送Challenge包...\n");
 	int nameLen = strlen(userName);
 	if (startMode%3 == 2)	/* 赛尔 */
 	{
 		if (sendCount == 0)
 		{
-			printf(_(">> 发送密码...\n"));
+			printf(_(">> 发送密码...(赛尔)\n"));
 			*(u_int16_t *)(sendPacket+0x0E) = htons(0x0100);
 			*(u_int16_t *)(sendPacket+0x10) = *(u_int16_t *)(sendPacket+0x14) = htons(nameLen+22);
 			sendPacket[0x12] = 0x02;
 			sendPacket[0x13] = capBuf[0x13];
 			sendPacket[0x16] = 0x04;
 			sendPacket[0x17] = 16;
+
 			memcpy(sendPacket+0x18, checkPass(capBuf[0x13], capBuf+0x18, capBuf[0x17]), 16);
 			memcpy(sendPacket+0x28, userName, nameLen);
+
 			setTimer(timeout);
 		}
 		return pcap_sendpacket(hPcap, sendPacket, nameLen+40);
@@ -507,14 +528,26 @@ static int sendChallengePacket()
 		sendPacket[0x13] = capBuf[0x13];
 		sendPacket[0x16] = 0x04;
 		sendPacket[0x17] = 16;
+
+
 		memcpy(sendPacket+0x18, checkPass(capBuf[0x13], capBuf+0x18, capBuf[0x17]), 16);
 		memcpy(sendPacket+0x28, userName, nameLen);
 
 		memcpy(sendPacket+0x28+nameLen, pkt_md5, sizeof(pkt3));         // new code
+		
+		memcpy(sendPacket+0x39, encodeIP(ip), 0x04);	//fill IP
+		memcpy(sendPacket+0x3d, encodeIP(mask), 0x04);	//fill mask
+		memcpy(sendPacket+0x41, encodeIP(gateway), 0x04); //fill gateway
+
 	//	memcpy(sendPacket + 0x90 + nameLen, computePwd(capBuf+0x18), 0x10);        // new code
 	    memcpy(sendPacket + 0xb8 + nameLen, computePwd(capBuf+0x18), 0x10);
 		//memcpy(sendPacket + 0xa0 +nameLen, fillBuf + 0x68, fillSize-0x68);      // new code
 		//memcpy(sendPacket + 0x108 + nameLen, computeV4(capBuf+0x18, capBuf[0x17]), 0x80);       // new code
+		printf("** MD5 seeds:\t");
+		for(i=0; i<capBuf[0x17]; ++i){
+			printf("%02x", capBuf[0x18 + i]);
+		}
+		printf("\n");
 		memcpy(sendPacket + 0x121 + nameLen, computeV4(capBuf+0x18, capBuf[0x17]), 0x80);
 		//sendPacket[0x77] = 0xc7;          
 		setTimer(timeout);
@@ -550,7 +583,7 @@ static int sendEchoPacket()
 
 static int sendLogoffPacket()
 {
-	setTimer(0);	/* 取消定时器 */
+	setTimer(0);	/*  */
 	if (startMode%3 == 2)	/* 赛尔 */
 	{
 		*(u_int16_t *)(sendPacket+0x0E) = htons(0x0102);

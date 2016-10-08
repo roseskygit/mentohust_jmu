@@ -104,6 +104,22 @@ char *formatIP(u_int32_t ip)
 	return tmp;
 }
 
+unsigned char *encodeIP(u_int32_t ip)
+{
+	int i;
+	unsigned char *p = (unsigned char *)(&ip);
+	static unsigned char pi[4];
+	for(i=0; i<4; ++i){
+		pi[i]=encode(p[i]);
+		/*
+		pi[i]=(pi[i]<<4)|(pi[i]>>4);  
+		pi[i]=((pi[i]<<2)&0xcc)|((pi[i]>>2)&0x33);  
+		pi[i]=((pi[i]<<1)&0xaa)|((pi[i]>>1)&0x55);
+		pi[i]=~pi[i];*/
+	}
+	return pi;
+}
+
 char *formatHex(const void *buf, int length)
 {
 	static char hex[385];
@@ -250,9 +266,15 @@ static int getAddress()
 	}
 	close(sock);
 
+	/*set gateway*/
+	gateway = ip;
+	u_char *p = (u_char *)(&gateway);
+	p[3] = (u_char)1;
+
 	printf(_("** 本机MAC:\t%s\n"), formatHex(localMAC, 6));
 	printf(_("** 使用IP:\t%s\n"), formatIP(ip));
 	printf(_("** 子网掩码:\t%s\n"), formatIP(mask));
+	printf(_("** 网关:\t%s\n"), formatIP(gateway));
 	return 0;
 
 getMACError:
